@@ -3,20 +3,51 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // Thêm GLTFLoader để tải file .glb
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js'; // Thêm Import VertexNormalsHelper
 import GUI from 'lil-gui';
 
 // --- 1. SETUP CƠ BẢN ---
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
 
+// --- TẠO CONTAINER CHO THÔNG TIN TỌA ĐỘ HTML ---
+const labelsContainer = document.createElement('div');
+labelsContainer.style.position = 'absolute';
+labelsContainer.style.top = '0';
+labelsContainer.style.left = '0';
+labelsContainer.style.width = '100%';
+labelsContainer.style.height = '100%';
+labelsContainer.style.pointerEvents = 'none';
+labelsContainer.style.overflow = 'hidden';
+document.body.appendChild(labelsContainer);
+
+const localAxes = [];
+const trackedObjects = [];
+
+function addTrackedObject(mesh, name) {
+    const el = document.createElement('div');
+    el.style.position = 'absolute';
+    el.style.color = '#ffffff';
+    el.style.fontFamily = 'monospace';
+    el.style.fontSize = '11px';
+    el.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+    el.style.padding = '4px 6px';
+    el.style.borderRadius = '4px';
+    el.style.transform = 'translate(-50%, 0)';
+    el.style.pointerEvents = 'none';
+    el.style.textAlign = 'center';
+    el.style.lineHeight = '1.3';
+    labelsContainer.appendChild(el);
+    trackedObjects.push({ mesh, element: el, name });
+}
+
 // --- 2. CAMERA & PROJECTION ---
 const aspect = window.innerWidth / window.innerHeight;
-// Mở rộng camera để nhìn thấy toàn bộ hệ mặt trời
-const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 3000); // Tăng far clipping plane lên 3000 để thấy skybox
+const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 3000); 
 perspectiveCamera.position.set(0, 60, 100);
 
-const orthographicCamera = new THREE.OrthographicCamera(-80 * aspect, 80 * aspect, 80, -80, 0.1, 3000); // Tương tự
+const orthographicCamera = new THREE.OrthographicCamera(-80 * aspect, 80 * aspect, 80, -80, 0.1, 3000); 
 orthographicCamera.position.set(0, 60, 100);
 orthographicCamera.lookAt(0, 0, 0);
 
@@ -26,7 +57,7 @@ let activeCamera = perspectiveCamera;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.shadowMap.enabled = true; // Bật Shadow Mapping
+renderer.shadowMap.enabled = true; 
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
@@ -54,44 +85,38 @@ const textureMap = createCheckerTexture();
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 
-// Tải texture
 const skyboxTexture = textureLoader.load('skybox.png');
 skyboxTexture.colorSpace = THREE.SRGBColorSpace;
 
-// Tải model hình cầu
 gltfLoader.load('skybox.glb', (gltf) => {
     const skybox = gltf.scene;
-    
-    // Scale to ra để bao trọn hệ mặt trời
     skybox.scale.set(1500, 1500, 1500); 
-
     skybox.traverse((child) => {
         if (child.isMesh) {
-            // Dùng MeshBasicMaterial để skybox không bị tối khi thiếu đèn chiếu sáng
             child.material = new THREE.MeshBasicMaterial({
                 map: skyboxTexture,
-                side: THREE.BackSide, // Chỉ render mặt trong của hình cầu
-                depthWrite: false     // Không ghi đè depth, giúp skybox luôn nằm dưới cùng
+                side: THREE.BackSide, 
+                depthWrite: false     
             });
         }
     });
-
     scene.add(skybox);
 });
 
-// Mảng lưu trữ để dễ dàng cập nhật thông qua GUI
-const allMaterials = [];
+// Sử dụng allMeshes để cập nhật texture, shading, và wireframe
 const allMeshes = [];
 
 // --- 5. MESH, MATERIALS & SHADING ---
-// Mặt trời (Phát sáng, không nhận bóng)
 const sunGeo = new THREE.SphereGeometry(5, 32, 32);
 const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 }); 
 const sun = new THREE.Mesh(sunGeo, sunMat);
 scene.add(sun);
-allMaterials.push(sunMat);
 
-// Trái đất & Mặt trăng (Giữ nguyên cấu trúc gốc)
+const sunAxes = new THREE.AxesHelper(8);
+sun.add(sunAxes);
+localAxes.push(sunAxes);
+addTrackedObject(sun, 'Sun');
+
 const earthOrbit = new THREE.Group();
 scene.add(earthOrbit);
 
@@ -102,6 +127,11 @@ earth.position.set(20, 0, 0);
 earth.castShadow = true;
 earth.receiveShadow = true;
 earthOrbit.add(earth);
+
+const earthAxes = new THREE.AxesHelper(4);
+earth.add(earthAxes);
+localAxes.push(earthAxes);
+addTrackedObject(earth, 'Earth');
 
 const moonOrbit = new THREE.Group();
 moonOrbit.position.set(20, 0, 0);
@@ -115,12 +145,15 @@ moon.castShadow = true;
 moon.receiveShadow = true;
 moonOrbit.add(moon);
 
-allMaterials.push(earthMat, moonMat);
+const moonAxes = new THREE.AxesHelper(1.5);
+moon.add(moonAxes);
+localAxes.push(moonAxes);
+addTrackedObject(moon, 'Moon');
+
 allMeshes.push(earth, moon);
 
-// Hàm Helper để tạo các hành tinh khác nhanh chóng
 const additionalPlanets = [];
-function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed) {
+function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed, name) {
     const orbit = new THREE.Group();
     scene.add(orbit);
 
@@ -132,46 +165,118 @@ function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed
     mesh.receiveShadow = true;
     orbit.add(mesh);
 
-    allMaterials.push(mat);
+    const planetAxes = new THREE.AxesHelper(size * 2);
+    mesh.add(planetAxes);
+    localAxes.push(planetAxes);
+    addTrackedObject(mesh, name);
+
     allMeshes.push(mesh);
 
     if (hasRing) {
-        // Tạo vành đai cho Sao Thổ
         const ringGeo = new THREE.TorusGeometry(size * 1.5, size * 0.2, 16, 100);
         const ringMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringMesh.rotation.x = Math.PI / 2 - 0.2; // Nghiêng vành đai
+        ringMesh.rotation.x = Math.PI / 2 - 0.2; 
         ringMesh.castShadow = true;
         ringMesh.receiveShadow = true;
         mesh.add(ringMesh);
-        allMaterials.push(ringMat);
         allMeshes.push(ringMesh);
     }
 
     additionalPlanets.push({ mesh, orbit, rotSpeed, orbSpeed });
 }
 
-// Thêm các hành tinh còn lại (Kích thước, Khoảng cách, Màu sắc, Có vành đai không, Tốc độ xoay, Tốc độ quỹ đạo)
-createPlanet(0.8, 10, 0xaaaaaa, false, 0.8, 1.2); // Mercury (Sao Thủy)
-createPlanet(1.5, 15, 0xe3bb76, false, 0.6, 0.9); // Venus (Sao Kim)
-// Trái đất ở vị trí 20
-createPlanet(1.2, 26, 0xc1440e, false, 1.0, 0.4); // Mars (Sao Hỏa)
-createPlanet(3.5, 38, 0xd8ca9d, false, 2.0, 0.2); // Jupiter (Sao Mộc)
-createPlanet(3.0, 52, 0xead6b8, true,  1.8, 0.15); // Saturn (Sao Thổ)
-createPlanet(2.2, 64, 0xd1e7e7, false, 1.5, 0.1); // Uranus (Sao Thiên Vương)
-createPlanet(2.1, 76, 0x5b5ddf, false, 1.4, 0.08); // Neptune (Sao Hải Vương)
+createPlanet(0.8, 10, 0xaaaaaa, false, 0.8, 1.2, 'Mercury');  
+createPlanet(1.5, 15, 0xe3bb76, false, 0.6, 0.9, 'Venus');    
+createPlanet(1.2, 26, 0xc1440e, false, 1.0, 0.4, 'Mars');     
+createPlanet(3.5, 38, 0xd8ca9d, false, 2.0, 0.2, 'Jupiter');  
+createPlanet(3.0, 52, 0xead6b8, true,  1.8, 0.15, 'Saturn');  
+createPlanet(2.2, 64, 0xd1e7e7, false, 1.5, 0.1, 'Uranus');   
+createPlanet(2.1, 76, 0x5b5ddf, false, 1.4, 0.08, 'Neptune'); 
+
+// --- NORMALS HELPERS SETUP ---
+const vertexHelpers = [];
+const faceHelpers = [];
+
+// Hàm Custom tạo Face Normal Helper 
+function createFaceNormalsHelper(mesh, size = 1.5, color = 0xff0000) {
+    const geometry = mesh.geometry;
+    const posAttr = geometry.attributes.position;
+    const index = geometry.index;
+    const linePos = [];
+    
+    const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+    const cb = new THREE.Vector3(), ab = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    const processFace = (a, b, c) => {
+        vA.fromBufferAttribute(posAttr, a);
+        vB.fromBufferAttribute(posAttr, b);
+        vC.fromBufferAttribute(posAttr, c);
+        
+        cb.subVectors(vC, vB);
+        ab.subVectors(vA, vB);
+        cb.cross(ab);
+        normal.copy(cb).normalize();
+        
+        center.copy(vA).add(vB).add(vC).divideScalar(3);
+        
+        linePos.push(center.x, center.y, center.z);
+        linePos.push(center.x + normal.x * size, center.y + normal.y * size, center.z + normal.z * size);
+    };
+
+    if (index) {
+        for (let i = 0; i < index.count; i += 3) processFace(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    } else {
+        for (let i = 0; i < posAttr.count; i += 3) processFace(i, i + 1, i + 2);
+    }
+    
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: color });
+    return new THREE.LineSegments(lineGeo, lineMat);
+}
+
+// Khởi tạo các helper cho tất cả các Mesh và gán chúng
+[sun, ...allMeshes].forEach(mesh => {
+    // Vertex Normal Helper (Xanh lá)
+    const vnh = new VertexNormalsHelper(mesh, 1.5, 0x00ff00);
+    vnh.visible = false;
+    scene.add(vnh);
+    vertexHelpers.push(vnh);
+
+    // Face Normal Helper (Đỏ)
+    const fnh = createFaceNormalsHelper(mesh, 1.5, 0xff0000);
+    fnh.visible = false;
+    mesh.add(fnh); // Thêm trực tiếp vào mesh để tự động rotate theo vật thể
+    faceHelpers.push(fnh);
+});
 
 // --- 6. LIGHTING MODELS ---
 const ambientLight = new THREE.AmbientLight(0x222222);
 scene.add(ambientLight);
 
-// Tăng tầm xa của PointLight để chiếu sáng tới các hành tinh xa
+// Point Light
 const pointLight = new THREE.PointLight(0xffffff, 1500, 300); 
 pointLight.position.set(0, 0, 0);
-pointLight.castShadow = true; // Mặt trời tạo bóng
-pointLight.shadow.mapSize.width = 2048; // Tăng độ phân giải bóng cho không gian lớn
+pointLight.castShadow = true; 
+pointLight.shadow.mapSize.width = 2048; 
 pointLight.shadow.mapSize.height = 2048;
 scene.add(pointLight);
+
+// Directional Light (THÊM MỚI)
+const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+directionalLight.position.set(100, 100, 100);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+directionalLight.shadow.camera.left = -100;
+directionalLight.shadow.camera.right = 100;
+directionalLight.shadow.camera.top = 100;
+directionalLight.shadow.camera.bottom = -100;
+scene.add(directionalLight);
+directionalLight.visible = false; // Tắt mặc định
 
 // --- 7. COORDINATE SYSTEMS ---
 const axesHelper = new THREE.AxesHelper(15);
@@ -181,14 +286,14 @@ scene.add(axesHelper);
 const renderScene = new RenderPass(scene, activeCamera);
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
 bloomPass.threshold = 0;
-bloomPass.strength = 1.5; // Cường độ phát sáng
+bloomPass.strength = 1.5; 
 bloomPass.radius = 0;
 
 const composer = new EffectComposer(renderer);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
-// --- 9. UI CONTROL (Bật/Tắt kiến thức) ---
+// --- 9. UI CONTROL ---
 const settings = {
     animation: true,
     coordinateSystem: true,
@@ -196,17 +301,53 @@ const settings = {
     projection: 'Perspective',
     texture: false,
     lighting: true,
+    lightType: 'Point Light', // Thêm Light Type
+    shading: 'Standard Shading', // Thêm Shading
+    vertexNormal: false, // Thêm UI cho Vertex Normal
+    faceNormal: false, // Thêm UI cho Face Normal
     shadows: true,
-    postProcessing: true
+    postProcessing: true,
+    cameraTarget: 'Default' 
 };
 
 const gui = new GUI({ title: 'CG Concepts Toggles' });
+
+// Toggles cơ bản
 gui.add(settings, 'animation').name('Animation');
-gui.add(settings, 'coordinateSystem').name('Coordinate System').onChange(v => axesHelper.visible = v);
+gui.add(settings, 'coordinateSystem').name('Coordinate System').onChange(v => {
+    axesHelper.visible = v;
+    localAxes.forEach(ax => ax.visible = v);
+});
+
+// Thêm UI: Chế độ Shading
+gui.add(settings, 'shading', ['Standard Shading', 'Flat Shading', 'Gouraud Shading', 'Phong Shading']).name('Shading').onChange(v => {
+    allMeshes.forEach(mesh => {
+        const oldMat = mesh.material;
+        let newMat;
+        
+        // Lưu lại texture và wireframe hiện tại
+        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe };
+
+        if (v === 'Standard Shading') newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 0.6 });
+        else if (v === 'Gouraud Shading') newMat = new THREE.MeshLambertMaterial(matParams);
+        else if (v === 'Phong Shading') newMat = new THREE.MeshPhongMaterial({ ...matParams, flatShading: false });
+        else if (v === 'Flat Shading') newMat = new THREE.MeshPhongMaterial({ ...matParams, flatShading: true });
+
+        mesh.material = newMat;
+        oldMat.dispose();
+    });
+});
 
 gui.add(settings, 'wireframe').name('Mesh Wireframe').onChange(v => {
-    // Cập nhật tất cả các vật liệu
-    allMaterials.forEach(mat => mat.wireframe = v);
+    sun.material.wireframe = v;
+    allMeshes.forEach(mesh => { mesh.material.wireframe = v; mesh.material.needsUpdate = true; });
+});
+
+gui.add(settings, 'texture').name('Texture Mapping').onChange(v => {
+    allMeshes.forEach(mesh => {
+        mesh.material.map = v ? textureMap : null;
+        mesh.material.needsUpdate = true;
+    });
 });
 
 gui.add(settings, 'projection', ['Perspective', 'Orthographic']).name('Camera Projection').onChange(v => {
@@ -214,29 +355,47 @@ gui.add(settings, 'projection', ['Perspective', 'Orthographic']).name('Camera Pr
     renderScene.camera = activeCamera;
 });
 
-gui.add(settings, 'texture').name('Texture Mapping').onChange(v => {
-    // Áp dụng texture cho tất cả trừ Mặt Trời
-    allMaterials.forEach(mat => {
-        if (mat !== sunMat) {
-            mat.map = v ? textureMap : null;
-            mat.needsUpdate = true;
-        }
-    });
-});
+// Thêm UI: Hiển thị Normals
+const folderNormal = gui.addFolder('Normals (Green=Vertex, Red=Face)');
+folderNormal.add(settings, 'vertexNormal').name('Vertex Normal').onChange(v => vertexHelpers.forEach(h => h.visible = v));
+folderNormal.add(settings, 'faceNormal').name('Face Normal').onChange(v => faceHelpers.forEach(h => h.visible = v));
 
-gui.add(settings, 'lighting').name('Lighting Models').onChange(v => pointLight.visible = v);
+// Thêm UI: Chuyển đổi Light Type
+const folderLighting = gui.addFolder('Lighting Models');
+folderLighting.add(settings, 'lighting').name('Enable Lighting').onChange(v => {
+    if (v) {
+        pointLight.visible = (settings.lightType === 'Point Light');
+        directionalLight.visible = (settings.lightType === 'Directional Light');
+    } else {
+        pointLight.visible = false;
+        directionalLight.visible = false;
+    }
+});
+folderLighting.add(settings, 'lightType', ['Point Light', 'Directional Light']).name('Light Type').onChange(v => {
+    if(settings.lighting) {
+        pointLight.visible = (v === 'Point Light');
+        directionalLight.visible = (v === 'Directional Light');
+    }
+});
 
 gui.add(settings, 'shadows').name('Shadow Mapping').onChange(v => {
     renderer.shadowMap.enabled = v;
-    // Cập nhật tất cả mesh
-    allMeshes.forEach(mesh => {
-        mesh.castShadow = v;
-        mesh.receiveShadow = v;
-    });
+    allMeshes.forEach(mesh => { mesh.castShadow = v; mesh.receiveShadow = v; });
+    directionalLight.castShadow = v;
+    pointLight.castShadow = v;
     scene.traverse(child => { if (child.material) child.material.needsUpdate = true; });
 });
 
 gui.add(settings, 'postProcessing').name('Post Processing (Bloom)');
+
+gui.add(settings, 'cameraTarget', ['Default', 'Sun', 'Mercury', 'Venus', 'Earth', 'Moon', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'])
+   .name('Camera Focus Target')
+   .onChange(v => {
+       if (v === 'Default') {
+           controls.target.set(0, 0, 0);
+           orthoControls.target.set(0, 0, 0);
+       }
+   });
 
 // --- 10. ANIMATION LOOP ---
 window.addEventListener('resize', () => {
@@ -251,30 +410,64 @@ window.addEventListener('resize', () => {
 });
 
 const clock = new THREE.Clock();
+const tempV = new THREE.Vector3();
+const targetV = new THREE.Vector3(); 
 
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
     if (settings.animation) {
-        // Transformation: Xoay quanh trục & Quỹ đạo của Trái đất/Mặt trăng
         sun.rotation.y += delta * 0.2;
         earth.rotation.y += delta * 1.0;
         moon.rotation.y += delta * 0.5;
         earthOrbit.rotation.y += delta * 0.5;
         moonOrbit.rotation.y += delta * 2.0;
 
-        // Transformation: Các hành tinh còn lại
         additionalPlanets.forEach(p => {
             p.mesh.rotation.y += delta * p.rotSpeed;
             p.orbit.rotation.y += delta * p.orbSpeed;
         });
     }
 
+    // Cập nhật Helper cho Vertex Normals vì nó gắn ngoài Scene
+    if (settings.vertexNormal) {
+        vertexHelpers.forEach(h => h.update());
+    }
+
+    trackedObjects.forEach(obj => {
+        if (!settings.coordinateSystem) {
+            obj.element.style.display = 'none';
+            return;
+        }
+
+        obj.mesh.getWorldPosition(tempV);
+        obj.element.innerHTML = `<strong>${obj.name}</strong><br>X: ${tempV.x.toFixed(1)}<br>Y: ${tempV.y.toFixed(1)}<br>Z: ${tempV.z.toFixed(1)}`;
+        tempV.project(activeCamera);
+
+        if (tempV.z > 1) {
+            obj.element.style.display = 'none';
+        } else {
+            obj.element.style.display = 'block';
+            const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+            obj.element.style.left = `${x}px`;
+            obj.element.style.top = `${y + (obj.name === 'Sun' ? 35 : 20)}px`; 
+        }
+    });
+
+    if (settings.cameraTarget !== 'Default') {
+        const targetObj = trackedObjects.find(obj => obj.name === settings.cameraTarget);
+        if (targetObj) {
+            targetObj.mesh.getWorldPosition(targetV);
+            controls.target.copy(targetV);
+            orthoControls.target.copy(targetV);
+        }
+    }
+
     if (settings.projection === 'Perspective') controls.update();
     else orthoControls.update();
 
-    // Render qua Post Processing hoặc trực tiếp
     if (settings.postProcessing) composer.render();
     else renderer.render(scene, activeCamera);
 }
