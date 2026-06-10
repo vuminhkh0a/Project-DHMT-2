@@ -4,14 +4,13 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js'; // Thêm Import VertexNormalsHelper
+import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
 import GUI from 'lil-gui';
 
-// --- 1. SETUP CƠ BẢN ---
+// 1. DOM Manipulation
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
 
-// --- TẠO CONTAINER CHO THÔNG TIN TỌA ĐỘ HTML ---
 const labelsContainer = document.createElement('div');
 labelsContainer.style.position = 'absolute';
 labelsContainer.style.top = '0';
@@ -42,18 +41,19 @@ function addTrackedObject(mesh, name) {
     trackedObjects.push({ mesh, element: el, name });
 }
 
-// --- 2. CAMERA & PROJECTION ---
+// 2. Perspective Projection
 const aspect = window.innerWidth / window.innerHeight;
 const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 3000); 
 perspectiveCamera.position.set(0, 60, 100);
 
+// 3. Orthographic Projection
 const orthographicCamera = new THREE.OrthographicCamera(-80 * aspect, 80 * aspect, 80, -80, 0.1, 3000); 
 orthographicCamera.position.set(0, 60, 100);
 orthographicCamera.lookAt(0, 0, 0);
 
 let activeCamera = perspectiveCamera;
 
-// --- 3. RENDERER & SHADOW MAPPING ---
+// 4. Percentage-Closer Filtering (PCF) Soft Shadows
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -64,7 +64,7 @@ container.appendChild(renderer.domElement);
 const controls = new OrbitControls(perspectiveCamera, renderer.domElement);
 const orthoControls = new OrbitControls(orthographicCamera, renderer.domElement);
 
-// --- 4. TEXTURE MAPPING (Procedural Canvas) ---
+// 5. Procedural Texture
 function createCheckerTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 256;
@@ -81,7 +81,7 @@ function createCheckerTexture() {
 }
 const textureMap = createCheckerTexture();
 
-// --- 4.5. SETUP SKYBOX ---
+// 6. Environment Mapping (Skybox)
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 
@@ -96,17 +96,16 @@ gltfLoader.load('skybox.glb', (gltf) => {
             child.material = new THREE.MeshBasicMaterial({
                 map: skyboxTexture,
                 side: THREE.BackSide, 
-                depthWrite: false     
+                depthWrite: false    
             });
         }
     });
     scene.add(skybox);
 });
 
-// Sử dụng allMeshes để cập nhật texture, shading, và wireframe
 const allMeshes = [];
 
-// --- 5. MESH, MATERIALS & SHADING ---
+// 7. Primitives & Transforms
 const sunGeo = new THREE.SphereGeometry(5, 32, 32);
 const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 }); 
 const sun = new THREE.Mesh(sunGeo, sunMat);
@@ -194,11 +193,10 @@ createPlanet(3.0, 52, 0xead6b8, true,  1.8, 0.15, 'Saturn');
 createPlanet(2.2, 64, 0xd1e7e7, false, 1.5, 0.1, 'Uranus');   
 createPlanet(2.1, 76, 0x5b5ddf, false, 1.4, 0.08, 'Neptune'); 
 
-// --- NORMALS HELPERS SETUP ---
+// 8. Face Normals & Vector Normalization
 const vertexHelpers = [];
 const faceHelpers = [];
 
-// Hàm Custom tạo Face Normal Helper 
 function createFaceNormalsHelper(mesh, size = 1.5, color = 0xff0000) {
     const geometry = mesh.geometry;
     const posAttr = geometry.attributes.position;
@@ -210,6 +208,7 @@ function createFaceNormalsHelper(mesh, size = 1.5, color = 0xff0000) {
     const normal = new THREE.Vector3();
     const center = new THREE.Vector3();
 
+    // 9. Cross Product
     const processFace = (a, b, c) => {
         vA.fromBufferAttribute(posAttr, a);
         vB.fromBufferAttribute(posAttr, b);
@@ -238,26 +237,24 @@ function createFaceNormalsHelper(mesh, size = 1.5, color = 0xff0000) {
     return new THREE.LineSegments(lineGeo, lineMat);
 }
 
-// Khởi tạo các helper cho tất cả các Mesh và gán chúng
+// 10. Vertex Normals
 [sun, ...allMeshes].forEach(mesh => {
-    // Vertex Normal Helper (Xanh lá)
     const vnh = new VertexNormalsHelper(mesh, 1.5, 0x00ff00);
     vnh.visible = false;
     scene.add(vnh);
     vertexHelpers.push(vnh);
 
-    // Face Normal Helper (Đỏ)
     const fnh = createFaceNormalsHelper(mesh, 1.5, 0xff0000);
     fnh.visible = false;
-    mesh.add(fnh); // Thêm trực tiếp vào mesh để tự động rotate theo vật thể
+    mesh.add(fnh); 
     faceHelpers.push(fnh);
 });
 
-// --- 6. LIGHTING MODELS ---
+// 11. Ambient Light
 const ambientLight = new THREE.AmbientLight(0x222222);
 scene.add(ambientLight);
 
-// Point Light
+// 12. Point Light
 const pointLight = new THREE.PointLight(0xffffff, 1500, 300); 
 pointLight.position.set(0, 0, 0);
 pointLight.castShadow = true; 
@@ -265,7 +262,7 @@ pointLight.shadow.mapSize.width = 2048;
 pointLight.shadow.mapSize.height = 2048;
 scene.add(pointLight);
 
-// Directional Light (THÊM MỚI)
+// 13. Directional Light
 const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
 directionalLight.position.set(100, 100, 100);
 directionalLight.castShadow = true;
@@ -276,13 +273,22 @@ directionalLight.shadow.camera.right = 100;
 directionalLight.shadow.camera.top = 100;
 directionalLight.shadow.camera.bottom = -100;
 scene.add(directionalLight);
-directionalLight.visible = false; // Tắt mặc định
+directionalLight.visible = false; 
 
-// --- 7. COORDINATE SYSTEMS ---
+// 14. Spot Light
+const spotLight = new THREE.SpotLight(0xffffff, 5000, 300, Math.PI / 4, 0.5, 1);
+spotLight.position.set(0, 100, 0);
+spotLight.castShadow = true;
+spotLight.shadow.mapSize.width = 2048;
+spotLight.shadow.mapSize.height = 2048;
+scene.add(spotLight);
+spotLight.visible = false;
+
+// 15. Local Coordinate System
 const axesHelper = new THREE.AxesHelper(15);
 scene.add(axesHelper);
 
-// --- 8. POST PROCESSING (Bloom Effect) ---
+// 16. Post-Processing (Bloom Effect)
 const renderScene = new RenderPass(scene, activeCamera);
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
 bloomPass.threshold = 0;
@@ -293,42 +299,37 @@ const composer = new EffectComposer(renderer);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
-// --- 9. UI CONTROL ---
+// 17. GUI Setup
 const settings = {
-    animation: true,
+    animation: 1, 
     coordinateSystem: true,
     wireframe: false,
     projection: 'Perspective',
     texture: false,
     lighting: true,
-    lightType: 'Point Light', // Thêm Light Type
-    shading: 'Standard Shading', // Thêm Shading
-    vertexNormal: false, // Thêm UI cho Vertex Normal
-    faceNormal: false, // Thêm UI cho Face Normal
+    lightType: 'Point Light', 
+    shading: 'Standard Shading', 
+    showNormals: false, 
+    normalType: 'Vertex Normal', 
     shadows: true,
     postProcessing: true,
-    cameraTarget: 'Default' 
+    cameraTarget: 'Default',
+    reflection: 'None',            
+    illuminationModel: 'Phong'     
 };
 
-const gui = new GUI({ title: 'CG Concepts Toggles' });
+const gui = new GUI({ title: 'Menu' });
 
-// Toggles cơ bản
-gui.add(settings, 'animation').name('Animation');
-gui.add(settings, 'coordinateSystem').name('Coordinate System').onChange(v => {
-    axesHelper.visible = v;
-    localAxes.forEach(ax => ax.visible = v);
-});
-
-// Thêm UI: Chế độ Shading
-gui.add(settings, 'shading', ['Standard Shading', 'Flat Shading', 'Gouraud Shading', 'Phong Shading']).name('Shading').onChange(v => {
+// 18. Shading Models
+function updateShading(v) {
     allMeshes.forEach(mesh => {
         const oldMat = mesh.material;
         let newMat;
         
-        // Lưu lại texture và wireframe hiện tại
         const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe };
 
-        if (v === 'Standard Shading') newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 0.6 });
+        if (v === 'None') newMat = new THREE.MeshBasicMaterial(matParams);
+        else if (v === 'Standard Shading') newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 0.6 });
         else if (v === 'Gouraud Shading') newMat = new THREE.MeshLambertMaterial(matParams);
         else if (v === 'Phong Shading') newMat = new THREE.MeshPhongMaterial({ ...matParams, flatShading: false });
         else if (v === 'Flat Shading') newMat = new THREE.MeshPhongMaterial({ ...matParams, flatShading: true });
@@ -336,60 +337,143 @@ gui.add(settings, 'shading', ['Standard Shading', 'Flat Shading', 'Gouraud Shadi
         mesh.material = newMat;
         oldMat.dispose();
     });
+}
+
+function updateLighting() {
+    if (settings.lighting) {
+        pointLight.visible = (settings.lightType === 'Point Light');
+        directionalLight.visible = (settings.lightType === 'Directional Light');
+        spotLight.visible = (settings.lightType === 'Spot Light'); 
+    } else {
+        pointLight.visible = false;
+        directionalLight.visible = false;
+        spotLight.visible = false;
+    }
+}
+
+function applyNormalMode() {
+    if (!settings.showNormals) {
+        vertexHelpers.forEach(h => h.visible = false);
+        faceHelpers.forEach(h => h.visible = false);
+        return;
+    }
+
+    if (settings.normalType === 'Vertex Normal') {
+        vertexHelpers.forEach(h => h.visible = true);
+        faceHelpers.forEach(h => h.visible = false);
+        
+        settings.shading = 'Phong Shading'; 
+        settings.lightType = 'Point Light';
+    } else {
+        vertexHelpers.forEach(h => h.visible = false);
+        faceHelpers.forEach(h => h.visible = true);
+        
+        settings.shading = 'Flat Shading'; 
+        settings.lightType = 'Directional Light';
+    }
+
+    if (shadingController) shadingController.updateDisplay();
+    if (lightTypeController) lightTypeController.updateDisplay();
+
+    updateShading(settings.shading);
+    updateLighting();
+}
+
+gui.add(settings, 'animation', 0, 3, 0.1).name('Animation speed');
+
+gui.add(settings, 'coordinateSystem').name('Coordinate').onChange(v => {
+    axesHelper.visible = v;
+    localAxes.forEach(ax => ax.visible = v);
 });
 
-gui.add(settings, 'wireframe').name('Mesh Wireframe').onChange(v => {
+// 19. Shading Application
+const shadingController = gui.add(settings, 'shading', ['None', 'Standard Shading', 'Flat Shading', 'Gouraud Shading', 'Phong Shading'])
+    .name('Shading').onChange(updateShading);
+
+gui.add(settings, 'wireframe').name('Mesh').onChange(v => {
     sun.material.wireframe = v;
     allMeshes.forEach(mesh => { mesh.material.wireframe = v; mesh.material.needsUpdate = true; });
 });
 
-gui.add(settings, 'texture').name('Texture Mapping').onChange(v => {
+gui.add(settings, 'texture').name('Texture').onChange(v => {
     allMeshes.forEach(mesh => {
         mesh.material.map = v ? textureMap : null;
         mesh.material.needsUpdate = true;
     });
 });
 
-gui.add(settings, 'projection', ['Perspective', 'Orthographic']).name('Camera Projection').onChange(v => {
+gui.add(settings, 'projection', ['Perspective', 'Orthographic']).name('Camera projection').onChange(v => {
     activeCamera = v === 'Perspective' ? perspectiveCamera : orthographicCamera;
     renderScene.camera = activeCamera;
 });
 
-// Thêm UI: Hiển thị Normals
-const folderNormal = gui.addFolder('Normals (Green=Vertex, Red=Face)');
-folderNormal.add(settings, 'vertexNormal').name('Vertex Normal').onChange(v => vertexHelpers.forEach(h => h.visible = v));
-folderNormal.add(settings, 'faceNormal').name('Face Normal').onChange(v => faceHelpers.forEach(h => h.visible = v));
+const folderNormal = gui.addFolder('Normals Vectors');
+folderNormal.add(settings, 'showNormals').name('Show vectors').onChange(applyNormalMode);
+folderNormal.add(settings, 'normalType', ['Vertex Normal', 'Face Normal']).name('Normal type').onChange(applyNormalMode);
 
-// Thêm UI: Chuyển đổi Light Type
 const folderLighting = gui.addFolder('Lighting Models');
-folderLighting.add(settings, 'lighting').name('Enable Lighting').onChange(v => {
-    if (v) {
-        pointLight.visible = (settings.lightType === 'Point Light');
-        directionalLight.visible = (settings.lightType === 'Directional Light');
-    } else {
-        pointLight.visible = false;
-        directionalLight.visible = false;
-    }
-});
-folderLighting.add(settings, 'lightType', ['Point Light', 'Directional Light']).name('Light Type').onChange(v => {
-    if(settings.lighting) {
-        pointLight.visible = (v === 'Point Light');
-        directionalLight.visible = (v === 'Directional Light');
-    }
+folderLighting.add(settings, 'lighting').name('Enable Lighting').onChange(updateLighting);
+
+const lightTypeController = folderLighting.add(settings, 'lightType', ['Point Light', 'Directional Light', 'Spot Light']).name('Light source').onChange(updateLighting);
+
+// 20. Reflection Models
+folderLighting.add(settings, 'reflection', ['None', 'Mirror Like', 'Diffuse', 'Ambient']).name('Reflection').onChange(v => {
+    allMeshes.forEach(mesh => {
+        if (!mesh.material) return;
+        if (v === 'Mirror Like') {
+            mesh.material.roughness = 0.0;
+            mesh.material.metalness = 1.0;
+        } else if (v === 'Diffuse') {
+            mesh.material.roughness = 0.9;
+            mesh.material.metalness = 0.1;
+        } else if (v === 'Ambient') {
+            mesh.material.roughness = 0.5;
+            mesh.material.metalness = 0.0;
+        } else { 
+            mesh.material.roughness = 0.6;
+            mesh.material.metalness = 0.0;
+        }
+        mesh.material.needsUpdate = true;
+    });
 });
 
-gui.add(settings, 'shadows').name('Shadow Mapping').onChange(v => {
+// 21. Illumination Models
+folderLighting.add(settings, 'illuminationModel', ['None', 'Phong', 'Blinn-Phong', 'Cook-Torrance', 'Oren-Nayar']).name('Illumination model').onChange(v => {
+    allMeshes.forEach(mesh => {
+        const oldMat = mesh.material;
+        let newMat;
+        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe };
+
+        if (v === 'None') {
+            newMat = new THREE.MeshBasicMaterial(matParams);
+        } else if (v === 'Phong' || v === 'Blinn-Phong') {
+            newMat = new THREE.MeshPhongMaterial({ ...matParams, flatShading: false });
+        } else if (v === 'Cook-Torrance') {
+            newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 0.2, metalness: 0.8 });
+        } else if (v === 'Oren-Nayar') {
+            newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 1.0, metalness: 0.0 });
+        }
+
+        if (newMat) {
+            mesh.material = newMat;
+            oldMat.dispose();
+        }
+    });
+});
+
+gui.add(settings, 'shadows').name('Shadow').onChange(v => {
     renderer.shadowMap.enabled = v;
     allMeshes.forEach(mesh => { mesh.castShadow = v; mesh.receiveShadow = v; });
     directionalLight.castShadow = v;
     pointLight.castShadow = v;
+    spotLight.castShadow = v; 
     scene.traverse(child => { if (child.material) child.material.needsUpdate = true; });
 });
 
-gui.add(settings, 'postProcessing').name('Post Processing (Bloom)');
+gui.add(settings, 'postProcessing').name('Bloom post processing');
 
 gui.add(settings, 'cameraTarget', ['Default', 'Sun', 'Mercury', 'Venus', 'Earth', 'Moon', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'])
-   .name('Camera Focus Target')
+   .name('Camera focus target')
    .onChange(v => {
        if (v === 'Default') {
            controls.target.set(0, 0, 0);
@@ -397,7 +481,7 @@ gui.add(settings, 'cameraTarget', ['Default', 'Sun', 'Mercury', 'Venus', 'Earth'
        }
    });
 
-// --- 10. ANIMATION LOOP ---
+// 22. Animation Loop & Delta Time
 window.addEventListener('resize', () => {
     const aspect = window.innerWidth / window.innerHeight;
     perspectiveCamera.aspect = aspect;
@@ -417,24 +501,22 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
-    if (settings.animation) {
-        sun.rotation.y += delta * 0.2;
-        earth.rotation.y += delta * 1.0;
-        moon.rotation.y += delta * 0.5;
-        earthOrbit.rotation.y += delta * 0.5;
-        moonOrbit.rotation.y += delta * 2.0;
+    sun.rotation.y += delta * 0.2 * settings.animation;
+    earth.rotation.y += delta * 1.0 * settings.animation;
+    moon.rotation.y += delta * 0.5 * settings.animation;
+    earthOrbit.rotation.y += delta * 0.5 * settings.animation;
+    moonOrbit.rotation.y += delta * 2.0 * settings.animation;
 
-        additionalPlanets.forEach(p => {
-            p.mesh.rotation.y += delta * p.rotSpeed;
-            p.orbit.rotation.y += delta * p.orbSpeed;
-        });
-    }
+    additionalPlanets.forEach(p => {
+        p.mesh.rotation.y += delta * p.rotSpeed * settings.animation;
+        p.orbit.rotation.y += delta * p.orbSpeed * settings.animation;
+    });
 
-    // Cập nhật Helper cho Vertex Normals vì nó gắn ngoài Scene
-    if (settings.vertexNormal) {
+    if (settings.showNormals && settings.normalType === 'Vertex Normal') {
         vertexHelpers.forEach(h => h.update());
     }
 
+    // 23. Screen Coordinates Projection
     trackedObjects.forEach(obj => {
         if (!settings.coordinateSystem) {
             obj.element.style.display = 'none';
