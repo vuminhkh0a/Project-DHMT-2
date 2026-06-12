@@ -88,6 +88,42 @@ const textureLoader = new THREE.TextureLoader();
 const skyboxTexture = textureLoader.load('skybox.png');
 skyboxTexture.colorSpace = THREE.SRGBColorSpace;
 
+const texSun = textureLoader.load('texture_sun.jpg');
+texSun.colorSpace = THREE.SRGBColorSpace;
+
+const texEarth = textureLoader.load('texture_earth.jpg');
+texEarth.colorSpace = THREE.SRGBColorSpace;
+
+const texMoon = textureLoader.load('texture_moon.jpg');
+texMoon.colorSpace = THREE.SRGBColorSpace;
+
+const texMercury = textureLoader.load('texture_mercury.jpg');
+texMercury.colorSpace = THREE.SRGBColorSpace;
+
+const texVenus = textureLoader.load('texture_venus.jpg');
+texVenus.colorSpace = THREE.SRGBColorSpace;
+
+const texMars = textureLoader.load('texture_mars.jpg');
+texMars.colorSpace = THREE.SRGBColorSpace;
+
+const texJupiter = textureLoader.load('texture_jupiter.jpg');
+texJupiter.colorSpace = THREE.SRGBColorSpace;
+
+const texSaturn = textureLoader.load('texture_saturn.jpg');
+texSaturn.colorSpace = THREE.SRGBColorSpace;
+
+const texSaturnRing = textureLoader.load('texture_saturn_ring.png');
+texSaturnRing.colorSpace = THREE.SRGBColorSpace;
+// Xoay texture của vành đai đi 90 độ (PI / 2) và đặt tâm xoay vào giữa
+texSaturnRing.center.set(0.5, 0.5); 
+texSaturnRing.rotation = Math.PI / 2;
+
+const texUranus = textureLoader.load('texture_uranus.jpg');
+texUranus.colorSpace = THREE.SRGBColorSpace;
+
+const texNeptune = textureLoader.load('texture_neptune.jpg');
+texNeptune.colorSpace = THREE.SRGBColorSpace;
+
 gltfLoader.load('skybox.glb', (gltf) => {
     const skybox = gltf.scene;
     skybox.scale.set(1500, 1500, 1500); 
@@ -152,7 +188,8 @@ addTrackedObject(moon, 'Moon');
 allMeshes.push(earth, moon);
 
 const additionalPlanets = [];
-function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed, name) {
+
+function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed, name, textureFile = null, ringTextureFile = null) {
     const orbit = new THREE.Group();
     scene.add(orbit);
 
@@ -162,6 +199,10 @@ function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed
     mesh.position.set(distance, 0, 0);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+
+    mesh.userData.originalColor = color;
+    mesh.userData.planetTexture = textureFile;
+
     orbit.add(mesh);
 
     const planetAxes = new THREE.AxesHelper(size * 2);
@@ -172,12 +213,16 @@ function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed
     allMeshes.push(mesh);
 
     if (hasRing) {
-        const ringGeo = new THREE.TorusGeometry(size * 1.5, size * 0.2, 16, 100);
-        const ringMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
+        const ringGeo = new THREE.TorusGeometry(size * 1.5, size * 0.2, 2, 100);
+        const ringMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, transparent: true });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         ringMesh.rotation.x = Math.PI / 2 - 0.2; 
         ringMesh.castShadow = true;
         ringMesh.receiveShadow = true;
+
+        ringMesh.userData.originalColor = color;
+        ringMesh.userData.planetTexture = ringTextureFile; 
+
         mesh.add(ringMesh);
         allMeshes.push(ringMesh);
     }
@@ -185,13 +230,13 @@ function createPlanet(size, distance, color, hasRing = false, rotSpeed, orbSpeed
     additionalPlanets.push({ mesh, orbit, rotSpeed, orbSpeed });
 }
 
-createPlanet(0.8, 10, 0xaaaaaa, false, 0.8, 1.2, 'Mercury');  
-createPlanet(1.5, 15, 0xe3bb76, false, 0.6, 0.9, 'Venus');    
-createPlanet(1.2, 26, 0xc1440e, false, 1.0, 0.4, 'Mars');     
-createPlanet(3.5, 38, 0xd8ca9d, false, 2.0, 0.2, 'Jupiter');  
-createPlanet(3.0, 52, 0xead6b8, true,  1.8, 0.15, 'Saturn');  
-createPlanet(2.2, 64, 0xd1e7e7, false, 1.5, 0.1, 'Uranus');   
-createPlanet(2.1, 76, 0x5b5ddf, false, 1.4, 0.08, 'Neptune'); 
+createPlanet(0.8, 10, 0xaaaaaa, false, 0.8, 1.2, 'Mercury', texMercury);  
+createPlanet(1.5, 15, 0xe3bb76, false, 0.6, 0.9, 'Venus', texVenus);    
+createPlanet(1.2, 26, 0xc1440e, false, 1.0, 0.4, 'Mars', texMars);      
+createPlanet(3.5, 38, 0xd8ca9d, false, 2.0, 0.2, 'Jupiter', texJupiter);  
+createPlanet(3.0, 52, 0xead6b8, true,  1.8, 0.15, 'Saturn', texSaturn, texSaturnRing);  
+createPlanet(2.2, 64, 0xd1e7e7, false, 1.5, 0.1, 'Uranus', texUranus);   
+createPlanet(2.1, 76, 0x5b5ddf, false, 1.4, 0.08, 'Neptune', texNeptune); 
 
 // 8. Face Normals & Vector Normalization
 const vertexHelpers = [];
@@ -292,7 +337,7 @@ scene.add(axesHelper);
 const renderScene = new RenderPass(scene, activeCamera);
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
 bloomPass.threshold = 0;
-bloomPass.strength = 1.5; 
+bloomPass.strength = 1.1; 
 bloomPass.radius = 0;
 
 const composer = new EffectComposer(renderer);
@@ -305,7 +350,7 @@ const settings = {
     coordinateSystem: true,
     wireframe: false,
     projection: 'Perspective',
-    texture: false,
+    texture: true,
     lighting: true,
     lightType: 'Point Light', 
     shading: 'Standard Shading', 
@@ -326,7 +371,7 @@ function updateShading(v) {
         const oldMat = mesh.material;
         let newMat;
         
-        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe };
+        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe, transparent: oldMat.transparent };
 
         if (v === 'None') newMat = new THREE.MeshBasicMaterial(matParams);
         else if (v === 'Standard Shading') newMat = new THREE.MeshStandardMaterial({ ...matParams, roughness: 0.6 });
@@ -395,12 +440,32 @@ gui.add(settings, 'wireframe').name('Mesh').onChange(v => {
     allMeshes.forEach(mesh => { mesh.material.wireframe = v; mesh.material.needsUpdate = true; });
 });
 
-gui.add(settings, 'texture').name('Texture').onChange(v => {
+function applyTextures(v) {
+    sun.material.map = v ? texSun : null;
+    sun.material.color.setHex(v ? 0xffffff : 0xffaa00); 
+    sun.material.needsUpdate = true;
+
     allMeshes.forEach(mesh => {
-        mesh.material.map = v ? textureMap : null;
+        if (mesh === earth) {
+            mesh.material.map = v ? texEarth : null;
+            mesh.material.color.setHex(v ? 0xffffff : 0x2233ff); 
+        } else if (mesh === moon) {
+            mesh.material.map = v ? texMoon : null;
+            mesh.material.color.setHex(v ? 0xffffff : 0x888888); 
+        } else if (mesh.userData && mesh.userData.planetTexture) {
+            mesh.material.map = v ? mesh.userData.planetTexture : null;
+            mesh.material.color.setHex(v ? 0xffffff : mesh.userData.originalColor);
+        } else {
+            mesh.material.map = v ? textureMap : null;
+            const defaultColor = mesh.userData && mesh.userData.originalColor ? mesh.userData.originalColor : mesh.material.color.getHex();
+            mesh.material.color.setHex(v ? 0xffffff : defaultColor); 
+        }
         mesh.material.needsUpdate = true;
     });
-});
+}
+
+gui.add(settings, 'texture').name('Texture').onChange(applyTextures);
+applyTextures(settings.texture);
 
 gui.add(settings, 'projection', ['Perspective', 'Orthographic']).name('Camera projection').onChange(v => {
     activeCamera = v === 'Perspective' ? perspectiveCamera : orthographicCamera;
@@ -442,7 +507,7 @@ folderLighting.add(settings, 'illuminationModel', ['None', 'Phong', 'Blinn-Phong
     allMeshes.forEach(mesh => {
         const oldMat = mesh.material;
         let newMat;
-        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe };
+        const matParams = { color: oldMat.color, map: oldMat.map, wireframe: oldMat.wireframe, transparent: oldMat.transparent };
 
         if (v === 'None') {
             newMat = new THREE.MeshBasicMaterial(matParams);
